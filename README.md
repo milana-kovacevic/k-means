@@ -1,7 +1,7 @@
 # k-means
 
 ##About
-This is the implementation of the k-means algoritm for processing images.
+This is an implementation of the k-means algorithm for processing images.
 
 ##Usage
 Open a picture you want by File > Open or by drag 'n drop method. Using sliders choose k and the precision. K is a number of colors you want in your output image. Precision is a number of iterations that will be done during the process. Bigger precision results a nicer output but at the same time prolongs the execution time of the program (6-7 iterations is OK).
