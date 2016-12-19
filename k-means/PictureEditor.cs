@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace k_means
@@ -27,6 +28,12 @@ namespace k_means
         int pictureBoxBeginWidth;
         int pictureBoxBeginHeight;
         int formBeginHeight;
+        volatile bool firstThreadFinished = false;
+        volatile bool secondThreadFinished = false;
+        ColorGenerator[] possible;
+        Pixel[,] currentPixels;
+        int k;
+
 
         private void editPicture(object sender, EventArgs e)
         {
@@ -46,6 +53,7 @@ namespace k_means
                     pixels[i, j] = new Pixel(c.R, c.G, c.B);
                 }
             //twoMeans();
+            k = kChooser.Value;
             kmeans(kChooser.Value, PrecisionSlider.Value);
             //pixelsToPicture(pixels);
             //pictureBox.Refresh(); // which is faster?
@@ -57,19 +65,31 @@ namespace k_means
         {
             progressBar.Visible = true;
             progressBar.Value = 1;
-            ColorGenerator[] possible = new ColorGenerator[k];
+            possible = new ColorGenerator[k];
             Random rnd = new Random();
-            int i, j;
+            int i;
             // randomizing k starting colors
             for (i = 0; i < k; i++)
                 possible[i] = new ColorGenerator(new Pixel((byte)rnd.Next(), (byte)rnd.Next(), (byte)rnd.Next()));
-            Pixel[,] currentPixels = new Pixel[width, height];
-            int step = 100 / precision;
+            currentPixels = new Pixel[width, height];
+            int step = 100 / precision - 1;
             for (int h = 0; h < precision; h++)
             {
                 progressBar.Value += step;
                 for (i = 0; i < k; i++)
                     possible[i].resetCounter();
+                
+                /* creating threads to optimize the execution time FIXME - it's not much of a progress */
+                Thread firstThread = new Thread(new ThreadStart(firstStartingMethod));
+                firstThreadFinished = false;
+                firstThread.Start();
+                Thread secondThread = new Thread(new ThreadStart(secondStartingMethod));
+                secondThreadFinished = false;
+                secondThread.Start();
+                // a loop that will end when both threads are finished
+                while(!firstThreadFinished && !secondThreadFinished);
+                
+                /* this part is now done in threads
                 for (i = 0; i < width; i++)
                 {
                     for (j = 0; j < height; j++)
@@ -79,6 +99,8 @@ namespace k_means
                         possible[closest].addPixel(pixels[i, j]);
                     }
                 }
+                */
+
                 //setting new possible colors as an average
                 for (i = 0; i < k; i++)
                 {
@@ -102,6 +124,38 @@ namespace k_means
             progressBar.Visible = false;
         }
 
+        private void firstStartingMethod()
+        {
+            Console.WriteLine("First thread starting...");
+            int i, j;
+            for (i = 0; i < width; i += 2)
+            {
+                for (j = 0; j < height; j++)
+                {
+                    int closest = indexOfClosestColor(pixels[i, j], possible, k);
+                    currentPixels[i, j] = possible[closest].getPixel();
+                    possible[closest].addPixel(pixels[i, j]);
+                }
+            }
+            firstThreadFinished = true;
+            //Console.WriteLine("First thread finished!");
+        }
+        private void secondStartingMethod()
+        {
+            Console.WriteLine("Second thread starting...");
+            int i, j;
+            for (i = 1; i < width; i += 2)
+            {
+                for (j = 0; j < height; j++)
+                {
+                    int closest = indexOfClosestColor(pixels[i, j], possible, k);
+                    currentPixels[i, j] = possible[closest].getPixel();
+                    possible[closest].addPixel(pixels[i, j]);
+                }
+            }
+            secondThreadFinished = true;
+            //Console.WriteLine("Second thread finished!");
+        }
         private int indexOfClosestColor(Pixel x, ColorGenerator[] possible, int k)
         {
             int min = x.distanceSqr(possible[0].getPixel());
@@ -171,6 +225,7 @@ namespace k_means
 
         private void pixelsToPicture(Pixel[,] pixels)
         {
+            // TODO threads maybe
             /*
             for (int i = 0; i < width; i++)
                 for (int j = 0; j < height; j++)
@@ -178,7 +233,7 @@ namespace k_means
             */
 
             //unsafe but faster way
-            BitmapData data = picture.LockBits(new Rectangle(0,0, width, height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+            BitmapData data = picture.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
             int stride = data.Stride;
             unsafe
             {
