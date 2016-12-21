@@ -225,16 +225,51 @@ namespace k_means
 
         private void pixelsToPicture(Pixel[,] pixels)
         {
-            // TODO threads maybe
-            /*
-            for (int i = 0; i < width; i++)
-                for (int j = 0; j < height; j++)
-                    picture.SetPixel(i, j, Color.FromArgb(pixels[i, j].getR(), pixels[i, j].getG(), pixels[i, j].getB()));
-            */
-
-            //unsafe but faster way
             BitmapData data = picture.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
             int stride = data.Stride;
+
+
+            /**************** ADDED ***************/
+            try 
+            {
+                //unsafe but faster way
+                unsafe
+                {
+                    byte* ptr = (byte*)data.Scan0;
+                    for (int i = 0; i < width; i++) 
+                    {
+                        for (int j = 0; j < height; j++) 
+                        {
+                            ptr[i * 3 + j * stride] = pixels[i, j].getB();
+                            ptr[i * 3 + j * stride + 1] = pixels[i, j].getG();
+                            ptr[i * 3 + j * stride + 2] = pixels[i, j].getR();
+                        }
+                    }
+                }
+            } 
+            catch (NullReferenceException) 
+            {
+                // at this point, we have to unlock bits
+                picture.UnlockBits(data);
+                // TODO threads maybe
+                for (int i = 0; i < width; i++)
+                    for (int j = 0; j < height; j++)
+                        picture.SetPixel(i, j, Color.FromArgb(pixels[i, j].getR(), pixels[i, j].getG(), pixels[i, j].getB()));
+            }
+
+            // trying to unlock
+            try 
+            {
+                picture.UnlockBits(data);
+            } 
+            catch (System.Runtime.InteropServices.ExternalException) {
+                // if it is already unlocked, do nothing
+            }
+
+
+            /************ REMOVED ***************
+            
+            //unsafe but faster way
             unsafe
             {
                 byte* ptr = (byte*)data.Scan0;
@@ -250,6 +285,7 @@ namespace k_means
                 }
             }
             picture.UnlockBits(data);
+            ************************************ */
         }
 
         private void OpenImage(object sender, EventArgs e)
